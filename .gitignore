@@ -11,6 +11,9 @@ data/**
 # also keep all .gitkeep files
 !.gitkeep
 
+# MLflow local tracking artifacts
+mlruns/
+
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

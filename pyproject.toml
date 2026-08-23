@@ -12,6 +12,18 @@ dependencies = [
     "pandas>=3.0.5",
     "pyarrow>=25.0.1",
     "scikit-learn>=1.9.0",
+    "numpy>=2.5.2",
+    "scipy>=1.18.0",
+    "matplotlib>=3.10.0",
+    "seaborn>=0.13.2",
+    "joblib>=1.5.3",
+    # tracking de experimentos: mlflow-skinny provee la API de tracking
+    # (runs, params, metrics, artefactos) sin el servidor completo de mlflow,
+    # que exige pandas<3 y es incompatible con este proyecto
+    "mlflow-skinny>=3.15.1",
+    # AutoML del notebook 06 (selección automática de modelos)
+    "flaml>=2.6.0",
+    "lightgbm>=4.7.0",
 ]
 
 [project.urls]
@@ -27,6 +39,8 @@ dev = [
     "pytest-cov>=7.1.0",
     "cruft[pyproject]>=2.16.0",# Automated Cookiecutter template synchronization
     "ipykernel>=7.3.0",
+    "nbclient>=0.10",
+    "nbformat>=5.10",
 ]
 
 #

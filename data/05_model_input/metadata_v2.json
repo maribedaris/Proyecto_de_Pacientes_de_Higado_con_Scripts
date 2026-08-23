@@ -1,5 +1,5 @@
 {
-  "fecha_generacion": "2026-08-23T20:30:26",
+  "fecha_generacion": "2026-08-23T19:18:05",
   "commit_hash": "85a483e95f5b32512fd509ce4e9dc7f8fcfa6c5f",
   "notebook_origen": "notebooks/4-feat_eng/01-basic-feature-engineering-pipeline-mba-2026-08-19.ipynb",
   "filas_dataset_corregido": 566,
