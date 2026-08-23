@@ -5,6 +5,9 @@ data/**
 !data/**/
 !data/README.md
 
+# artifacts consumed downstream (5-models): splits + preprocessor + metadata
+!data/05_model_input/**
+
 # also keep all .gitkeep files
 !.gitkeep
 
@@ -83,6 +86,10 @@ target/
 .mypy_cache/
 .pytest_cache/
 .ruff_cache/
+
+# Artefactos temporales de auditoría / experimentos (no versionar)
+.audit_backup/
+mlruns/
 
 # Hydra logs
 outputs
