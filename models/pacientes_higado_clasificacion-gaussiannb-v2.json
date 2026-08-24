@@ -3,6 +3,6 @@
   "entrenado_en": "notebooks/5-models/02, splits v2 de data/05_model_input (checksums verificados)",
   "umbral_decision": 0.0011009065316103538,
   "nota_umbral": "usar (predict_proba(X)[:,1] >= umbral).astype(int), NO predict()",
-  "fecha_generacion": "2026-08-24T01:12:16",
+  "fecha_generacion": "2026-08-24T01:29:33",
   "sha256_joblib": "08b2cb11ef442572e3717b4b759130aef68b36e1abbe72f530bc1104e7ec4a1c"
 }
