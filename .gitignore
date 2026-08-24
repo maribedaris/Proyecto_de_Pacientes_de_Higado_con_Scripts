@@ -8,6 +8,9 @@ data/**
 # artifacts consumed downstream (5-models): splits + preprocessor + metadata
 !data/05_model_input/**
 
+# serialized model artifacts (Kedro 06_models layer): referenced by notebooks/5-models/README.md
+!data/06_models/**
+
 # also keep all .gitkeep files
 !.gitkeep
 
