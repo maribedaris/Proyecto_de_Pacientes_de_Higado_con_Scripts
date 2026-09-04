@@ -27,13 +27,22 @@ PYTHONPATH=src .venv/bin/python -m data.feature_store --validate-only
 
 Configura estas variables de entorno antes de una carga real:
 
-- `HOPSWORKS_PROJECT`
+- `HOPSWORKS_PROJECT` (por defecto: `Pacientes_con_problemas`)
 - `HOPSWORKS_API_KEY`
 - `HOPSWORKS_HOST` (opcional)
 - `HOPSWORKS_FEATURE_GROUP` (opcional)
 - `HOPSWORKS_FEATURE_GROUP_VERSION` (opcional)
 
 La API key debe proporcionarse mediante el gestor de secretos o el entorno de ejecución. No debe escribirse en el repositorio.
+
+El Feature Store se obtiene desde el proyecto Hopsworks `Pacientes_con_problemas`, cuya ruta es `/Projects/Pacientes_con_problemas/`. Para dejarlo explícito en el entorno:
+
+```text
+HOPSWORKS_PROJECT=Pacientes_con_problemas
+HOPSWORKS_API_KEY=<secreto-no-versionado>
+```
+
+La API Key se lee exclusivamente desde `HOPSWORKS_API_KEY` y nunca se incluye en el código, logs o archivos versionados.
 
 ## Feature Group y carga
 

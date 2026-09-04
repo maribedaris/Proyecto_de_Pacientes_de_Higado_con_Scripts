@@ -198,7 +198,7 @@ def validate_feature_frame(data: pd.DataFrame) -> None:  # noqa: C901, PLR0912
 
 def _configuration() -> dict[str, Any]:
     """Lee configuración de Hopsworks sin exponer valores sensibles."""
-    project = os.getenv("HOPSWORKS_PROJECT")
+    project = os.getenv("HOPSWORKS_PROJECT", "Pacientes_con_problemas")
     api_key = os.getenv("HOPSWORKS_API_KEY")
     if not project or not api_key:
         raise RuntimeError("Configure HOPSWORKS_PROJECT y HOPSWORKS_API_KEY antes de cargar")
@@ -236,9 +236,16 @@ def upload_to_hopsworks(data: pd.DataFrame) -> int:
     )
     feature_group.insert(data, write_options={"wait_for_job": True})
     stored = feature_group.select_all().read()
-    missing_stored = set(EXPECTED_COLUMNS) - set(stored.columns)
+    normalized_columns = {str(column).lower(): column for column in stored.columns}
+    if len(normalized_columns) != len(stored.columns):
+        raise RuntimeError("Hopsworks devolvió columnas duplicadas tras normalizar nombres")
+    expected_columns = {column.lower() for column in EXPECTED_COLUMNS}
+    missing_stored = expected_columns - set(normalized_columns)
     if missing_stored:
         raise RuntimeError(f"Hopsworks no devolvió columnas esperadas: {sorted(missing_stored)}")
+    stored = stored.rename(
+        columns={normalized_columns[column.lower()]: column for column in EXPECTED_COLUMNS}
+    )
     stored = stored[EXPECTED_COLUMNS]
     validate_feature_frame(stored)
     if len(stored) < len(data):
