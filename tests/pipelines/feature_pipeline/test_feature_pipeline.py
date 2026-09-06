@@ -85,3 +85,109 @@ def test_main_accepts_data_and_output_paths(
     feature_pipeline.main()
 
     assert output_path.is_file()
+
+
+def test_rejects_non_numeric_value(tmp_path: Path) -> None:
+    input_path = _write_raw_csv(tmp_path)
+    data = pd.read_csv(input_path)
+    data["Albumin"] = data["Albumin"].astype(object)
+    data.loc[5, "Albumin"] = "not-a-number"
+    data.to_csv(input_path, index=False)
+
+    with pytest.raises(feature_pipeline.DataValidationError, match="Albumin"):
+        feature_pipeline.prepare_features(input_path)
+
+
+def test_rejects_missing_required_column(tmp_path: Path) -> None:
+    input_path = _write_raw_csv(tmp_path)
+    data = pd.read_csv(input_path).drop(columns=["Age"])
+    data.to_csv(input_path, index=False)
+
+    with pytest.raises(feature_pipeline.DataValidationError, match="Age"):
+        feature_pipeline.prepare_features(input_path)
+
+
+def test_rejects_invalid_dataset_label(tmp_path: Path) -> None:
+    input_path = _write_raw_csv(tmp_path)
+    data = pd.read_csv(input_path)
+    data.loc[5, "Dataset"] = 3
+    data.to_csv(input_path, index=False)
+
+    with pytest.raises(feature_pipeline.DataValidationError, match="Dataset"):
+        feature_pipeline.prepare_features(input_path)
+
+
+def test_rejects_excessive_nulls(tmp_path: Path) -> None:
+    input_path = _write_raw_csv(tmp_path)
+    data = pd.read_csv(input_path)
+    data.loc[5, "Albumin"] = None
+    data.to_csv(input_path, index=False)
+
+    with pytest.raises(feature_pipeline.DataValidationError, match="nulos"):
+        feature_pipeline.prepare_features(input_path)
+
+
+def test_rejects_invalid_gender_category(tmp_path: Path) -> None:
+    input_path = _write_raw_csv(tmp_path)
+    data = pd.read_csv(input_path)
+    data.loc[5, "Gender"] = "Unknown"
+    data.to_csv(input_path, index=False)
+
+    with pytest.raises(feature_pipeline.DataValidationError, match="Gender"):
+        feature_pipeline.prepare_features(input_path)
+
+
+def test_rejects_invalid_age_without_persisting_features(tmp_path: Path) -> None:
+    input_path = _write_raw_csv(tmp_path)
+    output_path = tmp_path / "invalid-features.parquet"
+    data = pd.read_csv(input_path)
+    data.loc[5, "Age"] = -1
+    data.to_csv(input_path, index=False)
+
+    with pytest.raises(feature_pipeline.DataValidationError, match="Age"):
+        feature_pipeline.run_feature_pipeline(input_path, output_path)
+
+    assert not output_path.exists()
+
+
+def test_rejects_age_equal_to_zero(tmp_path: Path) -> None:
+    input_path = _write_raw_csv(tmp_path)
+    data = pd.read_csv(input_path)
+    data.loc[5, "Age"] = 0
+    data.to_csv(input_path, index=False)
+
+    with pytest.raises(feature_pipeline.DataValidationError, match="Age"):
+        feature_pipeline.prepare_features(input_path)
+
+
+def test_rejects_infinite_value(tmp_path: Path) -> None:
+    input_path = _write_raw_csv(tmp_path)
+    data = pd.read_csv(input_path)
+    data.loc[5, "Albumin"] = float("inf")
+    data.to_csv(input_path, index=False)
+
+    with pytest.raises(feature_pipeline.DataValidationError, match="infinitos"):
+        feature_pipeline.prepare_features(input_path)
+
+
+def test_rejects_inconsistent_bilirubin_relation(tmp_path: Path) -> None:
+    features = feature_pipeline.prepare_features(_write_raw_csv(tmp_path))
+    features.loc[0, "Direct_Bilirubin"] = features.loc[0, "Total_Bilirubin"] + 1
+
+    with pytest.raises(feature_pipeline.DataValidationError, match="Direct_Bilirubin"):
+        feature_pipeline.validate_features(features)
+
+
+def test_validate_features_rejects_duplicate_records(tmp_path: Path) -> None:
+    features = feature_pipeline.prepare_features(_write_raw_csv(tmp_path))
+    duplicated = pd.concat([features, features.iloc[[0]]], ignore_index=True)
+
+    with pytest.raises(feature_pipeline.DataValidationError, match="duplicados"):
+        feature_pipeline.validate_features(duplicated)
+
+
+def test_validate_features_rejects_empty_dataset() -> None:
+    columns = [*feature_pipeline.ORIGINAL_COLUMNS, *feature_pipeline.DERIVED_COLUMNS]
+
+    with pytest.raises(feature_pipeline.DataValidationError, match="no quedan"):
+        feature_pipeline.validate_features(pd.DataFrame(columns=columns))
