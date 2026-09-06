@@ -1,78 +1,87 @@
 from pathlib import Path
-from typing import TypedDict
 
 import pandas as pd
 import pytest
 
 from pipelines.feature_pipeline import feature_pipeline
 
+RAW_COLUMNS = [
+    "Age",
+    "Gender",
+    "Total_Bilirubin",
+    "Direct_Bilirubin",
+    "Alkaline_Phosphotase",
+    "Alamine_Aminotransferase",
+    "Aspartate_Aminotransferase",
+    "Total_Protiens",
+    "Albumin",
+    "Albumin_and_Globulin_Ratio",
+    "Dataset",
+]
 EXPECTED_RECORDS = 2
+EXPECTED_DIRECT_BILIRUBIN = 0.4
 
 
-class PipelineCalls(TypedDict, total=False):
-    path: str | Path
-    features: pd.DataFrame
+def _write_raw_csv(tmp_path: Path) -> Path:
+    rows = [
+        [40, " Male ", 1.2, 0.4, 100, 20, 30, 6.0, 3.0, 1.0, 1],
+        [40, " Male ", 1.2, 0.4, 100, 20, 30, 6.0, 3.0, 1.0, 1],
+        [40, " Male ", 1.2, None, 100, 20, 30, 6.0, 3.0, 1.0, 1],
+        [45, "Female", 1.0, 0.3, 110, 22, 35, 6.2, 3.1, 1.0, None],
+        [55, "Male", 1.0, 1.2, 120, 25, 40, 6.5, 3.2, 0.9, 1],
+        [50, "Female", 2.0, 0.8, 120, 25, 40, 6.5, 3.2, 0.9, 2],
+    ]
+    data = pd.DataFrame(rows, columns=RAW_COLUMNS)
+    data["Unnamed: 0"] = range(len(data))
+    path = tmp_path / "raw.csv"
+    data.to_csv(path, index=False)
+    return path
 
 
-def _synthetic_features() -> pd.DataFrame:
-    return pd.DataFrame(
-        {
-            "record_id": ["record-1", "record-2"],
-            "Age": [40, 50],
-            "Gender": ["Male", "Female"],
-            "Total_Bilirubin": [1.2, 2.0],
-            "Direct_Bilirubin": [0.4, 0.8],
-            "Alkaline_Phosphotase": [100, 120],
-            "Alamine_Aminotransferase": [20, 25],
-            "Aspartate_Aminotransferase": [30, 40],
-            "Total_Protiens": [6.0, 6.5],
-            "Albumin": [3.0, 3.2],
-            "Albumin_and_Globulin_Ratio": [1.0, 0.9],
-            "Ratio_Bilirrubina_Directa": [1 / 3, 0.4],
-            "Ratio_De_Ritis": [1.5, 1.6],
-            "Dataset": ["1", "2"],
-        }
+def test_prepare_features_cleans_raw_data_and_creates_ratios(tmp_path: Path) -> None:
+    features = feature_pipeline.prepare_features(_write_raw_csv(tmp_path))
+
+    assert list(features.columns) == [*RAW_COLUMNS, *feature_pipeline.DERIVED_COLUMNS]
+    assert len(features) == EXPECTED_RECORDS
+    assert not any(column.startswith("Unnamed:") for column in features.columns)
+    assert features["Gender"].tolist() == ["Male", "Female"]
+    assert features["Dataset"].tolist() == ["1", "2"]
+    assert features.loc[0, "Direct_Bilirubin"] == EXPECTED_DIRECT_BILIRUBIN
+    assert features.loc[0, "Ratio_Bilirrubina_Directa"] == pytest.approx(1 / 3)
+    assert features.loc[0, "Ratio_De_Ritis"] == pytest.approx(1.5)
+    assert features.loc[1, "Ratio_Bilirrubina_Directa"] == pytest.approx(0.4)
+    assert features.loc[1, "Ratio_De_Ritis"] == pytest.approx(1.6)
+
+
+def test_run_feature_pipeline_writes_parquet_without_absolute_paths(tmp_path: Path) -> None:
+    output_path = tmp_path / "features" / "features.parquet"
+
+    result = feature_pipeline.run_feature_pipeline(_write_raw_csv(tmp_path), output_path)
+
+    assert result == output_path
+    assert output_path.exists()
+    saved = pd.read_parquet(output_path)
+    pd.testing.assert_frame_equal(
+        saved, feature_pipeline.prepare_features(_write_raw_csv(tmp_path))
     )
 
 
-def test_run_feature_pipeline_reuses_preparation_and_storage(
-    monkeypatch: pytest.MonkeyPatch,
+def test_main_accepts_data_and_output_paths(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    features = _synthetic_features()
-    calls: PipelineCalls = {}
+    input_path = _write_raw_csv(tmp_path)
+    output_path = tmp_path / "main-features.parquet"
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "feature_pipeline.py",
+            "--data-path",
+            str(input_path),
+            "--output-path",
+            str(output_path),
+        ],
+    )
 
-    def fake_prepare(path: str | Path) -> pd.DataFrame:
-        calls["path"] = path
-        return features
+    feature_pipeline.main()
 
-    def fake_store(data: pd.DataFrame) -> int:
-        calls["features"] = data
-        return len(data)
-
-    monkeypatch.setattr(feature_pipeline, "prepare_features", fake_prepare)
-    monkeypatch.setattr(feature_pipeline, "store_features", fake_store)
-
-    result = feature_pipeline.run_feature_pipeline("synthetic.csv")
-
-    assert result == EXPECTED_RECORDS
-    assert calls["path"] == "synthetic.csv"
-    assert calls["features"] is features
-    assert features["record_id"].is_unique
-    assert {"Ratio_Bilirrubina_Directa", "Ratio_De_Ritis"}.issubset(features.columns)
-
-
-def test_run_feature_pipeline_uses_default_data_path(monkeypatch: pytest.MonkeyPatch) -> None:
-    captured: PipelineCalls = {}
-
-    def fake_prepare(path: str | Path) -> pd.DataFrame:
-        captured["path"] = path
-        return _synthetic_features()
-
-    def fake_store(data: pd.DataFrame) -> int:
-        return len(data)
-
-    monkeypatch.setattr(feature_pipeline, "prepare_features", fake_prepare)
-    monkeypatch.setattr(feature_pipeline, "store_features", fake_store)
-
-    assert feature_pipeline.run_feature_pipeline() == EXPECTED_RECORDS
-    assert captured["path"] == feature_pipeline.DEFAULT_DATA_PATH
+    assert output_path.is_file()
