@@ -7,6 +7,7 @@ import logging
 from collections import defaultdict
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 
 from pipelines.feature_pipeline.transformers import CocientesClinicos
@@ -31,17 +32,56 @@ ORIGINAL_COLUMNS = [
 NUMERIC_COLUMNS = [column for column in ORIGINAL_COLUMNS if column not in {"Gender", "Dataset"}]
 DERIVED_COLUMNS = ["Ratio_Bilirrubina_Directa", "Ratio_De_Ritis"]
 MIN_COMPATIBLE_GROUP_SIZE = 2
+MAX_NULL_RATIO = 0.05
+# El dataset real llega como máximo a 2.87%; 5% permite esa variación sin
+# aceptar una degradación importante de la calidad de entrada.
+VALID_GENDERS = frozenset({"Male", "Female"})
+VALID_TARGETS = frozenset({1, 2})
+
+
+class DataValidationError(ValueError):
+    """Error de calidad o integridad que impide persistir las features."""
 
 
 def _read_raw_data(data_path: str | Path) -> pd.DataFrame:
-    """Lee únicamente las columnas relevantes y normaliza sus tipos."""
+    """Lee las columnas relevantes y valida las condiciones básicas de entrada.
+
+    Los tipos se comprueban antes de normalizarlos para no convertir un valor
+    inválido en un nulo silenciosamente.
+    """
     data = pd.read_csv(data_path, low_memory=False, na_values=["", "NA", "NaN"])
+    missing = set(ORIGINAL_COLUMNS) - set(data.columns)
+    if missing:
+        raise DataValidationError(
+            f"Validación de datos fallida: faltan columnas obligatorias {sorted(missing)}."
+        )
     data = data[ORIGINAL_COLUMNS].copy()
+
+    for column in NUMERIC_COLUMNS:
+        converted = pd.to_numeric(data[column], errors="coerce")
+        invalid = data[column].notna() & converted.isna()
+        if invalid.any():
+            raise DataValidationError(
+                f"Validación de datos fallida: {column} contiene valores no numéricos."
+            )
+
+    genders = data["Gender"].astype("string").str.strip()
+    invalid_genders = genders.notna() & ~genders.isin(VALID_GENDERS)
+    if invalid_genders.any():
+        raise DataValidationError(
+            "Validación de datos fallida: Gender solo puede contener Male o Female."
+        )
+
+    target = pd.to_numeric(data["Dataset"], errors="coerce")
+    invalid_target = data["Dataset"].notna() & target.isna()
+    if invalid_target.any() or not target.dropna().isin(VALID_TARGETS).all():
+        raise DataValidationError(
+            "Validación de datos fallida: Dataset solo puede contener las etiquetas 1 y 2."
+        )
+
     data[NUMERIC_COLUMNS] = data[NUMERIC_COLUMNS].apply(pd.to_numeric, errors="coerce")
-    data["Gender"] = data["Gender"].astype("string").str.strip()
-    data["Dataset"] = (
-        pd.to_numeric(data["Dataset"], errors="coerce").astype("Int64").astype("string")
-    )
+    data["Gender"] = genders
+    data["Dataset"] = target.astype("Int64").astype("string")
     return data
 
 
@@ -97,22 +137,106 @@ def _recover_missing_values(data: pd.DataFrame) -> pd.DataFrame:
 
 
 def prepare_features(data_path: str | Path) -> pd.DataFrame:
-    """Limpia el histórico y crea las variables clínicas derivadas."""
+    """Prepara, transforma y valida el histórico antes de devolver sus features.
+
+    El flujo conserva la limpieza del Issue #1, incluida la recuperación de
+    faltantes, la deduplicación y la eliminación de etiquetas o bilirrubinas
+    inconsistentes. Después crea los ratios y ejecuta la validación final.
+    """
     data = _recover_missing_values(_read_raw_data(data_path))
     data = data.drop_duplicates()
     data = data[data["Dataset"].notna()]
+    # Esta limpieza conserva el comportamiento del Issue #1; la validación
+    # posterior garantiza que ninguna fila inconsistente llegue al Parquet.
     inconsistent = (data["Direct_Bilirubin"] > data["Total_Bilirubin"]).fillna(False)
     data = data.loc[~inconsistent].copy()
 
     data[DERIVED_COLUMNS] = CocientesClinicos().fit_transform(data)
-    return data[[*ORIGINAL_COLUMNS, *DERIVED_COLUMNS]].reset_index(drop=True)
+    features = data[[*ORIGINAL_COLUMNS, *DERIVED_COLUMNS]].reset_index(drop=True)
+    validate_features(features)
+    return features
+
+
+def _validate_schema_and_nulls(features: pd.DataFrame) -> None:
+    expected_columns = [*ORIGINAL_COLUMNS, *DERIVED_COLUMNS]
+    if list(features.columns) != expected_columns:
+        raise DataValidationError(
+            "Validación de datos fallida: el esquema de features no coincide con el esperado."
+        )
+    null_ratios = features[ORIGINAL_COLUMNS + DERIVED_COLUMNS].isna().mean()
+    exceeded = null_ratios[null_ratios > MAX_NULL_RATIO]
+    if not exceeded.empty:
+        columns = ", ".join(f"{column} ({ratio:.2%})" for column, ratio in exceeded.items())
+        raise DataValidationError(
+            f"Validación de datos fallida: porcentaje de nulos superior al 5% en {columns}."
+        )
+
+
+def _validate_categories(features: pd.DataFrame) -> None:
+    invalid_genders = features["Gender"].dropna().isin(VALID_GENDERS).eq(False)
+    if invalid_genders.any():
+        raise DataValidationError(
+            "Validación de datos fallida: Gender solo puede contener Male o Female."
+        )
+    if not features["Dataset"].isin({"1", "2"}).all():
+        raise DataValidationError(
+            "Validación de datos fallida: Dataset solo puede contener las etiquetas 1 y 2."
+        )
+
+
+def _validate_numeric_ranges(features: pd.DataFrame) -> None:
+    numeric_columns = NUMERIC_COLUMNS + DERIVED_COLUMNS
+    if features[numeric_columns].select_dtypes(exclude=np.number).shape[1]:
+        raise DataValidationError(
+            "Validación de datos fallida: las variables clínicas deben ser numéricas."
+        )
+    numeric_values = features[numeric_columns].to_numpy(dtype=float)
+    finite_values = numeric_values[~np.isnan(numeric_values)]
+    if not np.isfinite(finite_values).all():
+        raise DataValidationError(
+            "Validación de datos fallida: las variables clínicas contienen infinitos."
+        )
+    negative_columns = features[NUMERIC_COLUMNS].lt(0).any()
+    if negative_columns.any():
+        columns = ", ".join(negative_columns[negative_columns].index)
+        raise DataValidationError(
+            f"Validación de datos fallida: las variables clínicas no pueden ser negativas ({columns})."
+        )
+    if (features["Age"].dropna() <= 0).any():
+        raise DataValidationError("Validación de datos fallida: Age debe ser mayor que cero.")
+
+
+def _validate_integrity(features: pd.DataFrame) -> None:
+    inconsistent = (features["Direct_Bilirubin"] > features["Total_Bilirubin"]).fillna(False)
+    if inconsistent.any():
+        raise DataValidationError(
+            "Validación de datos fallida: Direct_Bilirubin no puede superar Total_Bilirubin."
+        )
+    if features.duplicated().any():
+        raise DataValidationError(
+            "Validación de datos fallida: persisten registros duplicados en las features."
+        )
+
+
+def validate_features(features: pd.DataFrame) -> None:
+    """Actúa como última barrera antes de permitir la persistencia.
+
+    Si una regla de esquema, nulos, categorías, rangos o integridad falla,
+    lanza ``DataValidationError`` y el pipeline no llega a escribir el Parquet.
+    """
+    if features.empty:
+        raise DataValidationError("Validación de datos fallida: no quedan registros válidos.")
+    _validate_schema_and_nulls(features)
+    _validate_categories(features)
+    _validate_numeric_ranges(features)
+    _validate_integrity(features)
 
 
 def run_feature_pipeline(
     data_path: str | Path = DEFAULT_DATA_PATH,
     output_path: str | Path = DEFAULT_OUTPUT_PATH,
 ) -> Path:
-    """Ejecuta el pipeline y devuelve la ruta del Parquet generado."""
+    """Genera el Parquet solo después de validar correctamente las features."""
     features = prepare_features(data_path)
     output = Path(output_path)
     output.parent.mkdir(parents=True, exist_ok=True)
