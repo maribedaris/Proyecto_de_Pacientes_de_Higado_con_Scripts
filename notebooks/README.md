@@ -1,15 +1,15 @@
-# Template data science container - Notebooks
+# Notebooks del proyecto
 
-Project the notebooks. The naming convention is:
+Los notebooks siguen esta convención de nombres:
 
-`[##.#]-[creator initials]-[short_description]-[yyyy_mm_dd].ipynb`
+`[##.#]-[initials]-[short_description]-[yyyy_mm_dd].ipynb`
 
-* `##.#` is the notebook number and version.
-* `creator initials` are the initials of the person who created the notebook.
-* `short_description` is a short `_` delimited description of the notebook.
-* `yyyy_mm_dd` is the date the notebook was created.
+* `##.#`: número y versión del notebook.
+* `initials`: iniciales de la persona que lo creó.
+* `short_description`: descripción corta separada por `_`.
+* `yyyy_mm_dd`: fecha de creación del notebook.
 
-Examples:
+Ejemplos:
 
 ```text
 01-jrz-data_exploration-2024_10_02.ipynb
@@ -17,29 +17,29 @@ Examples:
 02.2-jrz_data_raw_analysis-2024_11_21.ipynb
 ```
 
-## Folder structure
+## Estructura de carpetas
 
-### Data
+### Datos
 
 ```text
 data/
-├── 01_raw/                   # Original data, without modifications
-├── 02_intermediate/          # Data resulting from intermediate transformations
-├── 03_primary/               # Data prepared for analysis and modeling
-└── 04_reporting/             # Data and results prepared for reporting
+├── 01_raw/                   # Datos originales, sin modificaciones
+├── 02_intermediate/          # Datos de transformaciones intermedias
+├── 03_primary/               # Datos preparados para análisis y modelado
+└── 04_reporting/             # Datos y resultados para informes
 ```
 
 ### Notebooks
 
 ```text
 notebooks/
-├── 1-data                    # Data extraction and cleaning
-├── 2-exploration             # Exploratory data analysis (EDA)
-├── 3-analysis                # Statistical analysis and hypothesis testing
-├── 4-feat_eng                # Feature engineering (creation, selection, and transformation)
-├── 5-models                  # Model training, evaluation, and hyperparameter tuning
-├── 6-interpretation          # Model interpretation
-├── 7-deploy                  # Model packaging and deployment strategies
-├── 8-reports                 # Storytelling, summaries, and analysis conclusions
+├── 1-data                    # Extracción y limpieza de datos
+├── 2-exploration             # Análisis exploratorio de datos (EDA)
+├── 3-analysis                # Análisis estadístico y pruebas de hipótesis
+├── 4-feat_eng                # Creación, selección y transformación de features
+├── 5-models                  # Entrenamiento, evaluación y ajuste de hiperparámetros
+├── 6-interpretation          # Interpretación del modelo
+├── 7-deploy                  # Empaquetado y estrategias de despliegue
+├── 8-reports                 # Informes, resultados y conclusiones
 └── notebook_template.ipynb
 ```

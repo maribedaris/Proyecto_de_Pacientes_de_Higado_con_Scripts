@@ -1,9 +1,8 @@
 # Etapa 5 — Modelos: resumen ejecutivo
 
-Resultado consolidado de la selección y validación de modelos, tras la corrección de
-data leakage de la etapa de feature engineering (PR #24). Todos los números de esta
-tabla provienen de la evaluación sobre el mismo conjunto de prueba corregido
-(`x_test_v2`, 114 pacientes, deduplicado por paciente).
+Resultado consolidado de la selección y validación de modelos. Todos los números de esta
+tabla provienen de la evaluación sobre el mismo conjunto de prueba (`x_test_v2`, 114
+pacientes, deduplicado por paciente).
 
 ## Tabla comparativa final (test v2, ordenada por f1_macro)
 
@@ -30,32 +29,30 @@ notebook 02. Artefacto: `models/pacientes_higado_clasificacion-gaussiannb-v2.job
 particular, **nunca llamar `predict()` directo**: el umbral no está empaquetado en el
 pipeline y aplicar el corte 0.5 por defecto degrada el f1_macro de 0.741 a 0.631.
 
-## El hallazgo más importante del proceso
+## Consideraciones metodológicas
 
-El leakage original — pacientes duplicados entre entrenamiento y prueba que la
-limpieza no detectaba — no solo inflaba las métricas: **cambiaba qué modelo parecía
-ganador**. En la selección manual, el filtro que rankeaba por recall de la clase
-mayoritaria (inflado por el mismo leakage y el desbalance 71/29) descartó a
-GaussianNB, que resultó ser el mejor modelo del proyecto cuando finalmente se le dio
-oportunidad. En el AutoML, la misma búsqueda FLAML con el mismo presupuesto y espacio
-eligió un extra_tree con el split contaminado y un k-NN con el split corregido — el
-ganador cambió por completo, y las conclusiones de la corrida contaminada no se
-sostuvieron. La lección: la limpieza de datos y el split correcto importan más que la
-elección del algoritmo. Ningún tuning rescata un modelo entrenado y evaluado sobre
-datos equivocados, y ninguna métrica es confiable hasta que la validación lo sea.
+Durante la revisión del pipeline se identificó data leakage porque registros del mismo
+paciente podían aparecer simultáneamente en entrenamiento y prueba. Esto contaminaba
+la evaluación y producía métricas optimistas, afectando la comparación y selección del
+modelo.
+
+La corrección consistió en separar adecuadamente los pacientes antes de ajustar el
+preprocesamiento y los modelos, y en evaluar después sobre un conjunto de prueba
+independiente. Los resultados posteriores a esta corrección son los que deben tomarse
+como referencia válida. La preparación de features, los splits y la validación del
+proceso se describen en los notebooks enlazados a continuación.
 
 ## Dónde está el detalle
 
-| Notebook | Contenido | Corrección aplicada |
+| Notebook | Contenido | Características del proceso |
 |---|---|---|
-| [01-heuristic_model](01-heuristic_model-mba-2026-08-19.ipynb) | Baseline heurístico clínico (regla de 4 pruebas hepáticas) | Splits v2 + advertencia de baseline informado por dominio |
-| [02-basic_algorithms_model_selection](02-basic_algorithms_model_selection-mba-2026-08-19.ipynb) | Comparación de 7 familias, tuning, umbrales, **GaussianNB ganador** | Splits v2 + permutación + re-tuning con f1_macro + hallazgo del filtro sesgado |
-| [03-first_model](03-first_model-mba-2026-08-19.ipynb) | Primer modelo ML (RF) | Splits v2 + re-tuning con f1_macro |
-| [04-experiment-track-model](04-experiment-track-model-mba-2026-08-19.ipynb) | Tracking de experimentos (MLflow) | Splits v2 + scoring f1_macro |
-| [05-model_validation](05-model_validation-mba-2026-08-19.ipynb) | Validación de datos y proceso | Splits v2 + re-verificación de fugas |
-| [06-automl_model_selection](06-automl_model_selection-mba-2026-08-20.ipynb) | AutoML (FLAML) | Splits v2 — el ganador cambió de extra_tree a k-NN |
+| [01-heuristic_model](01-heuristic_model-mba-2026-08-19.ipynb) | Línea base heurística clínica (regla de 4 pruebas hepáticas) | Evaluación con el conjunto de prueba v2 |
+| [02-basic_algorithms_model_selection](02-basic_algorithms_model_selection-mba-2026-08-19.ipynb) | Comparación de 7 familias, ajuste, umbrales, **GaussianNB ganador** | Permutación y selección por `f1_macro` |
+| [03-first_model](03-first_model-mba-2026-08-19.ipynb) | Primer modelo ML (RF) | Ajuste por `f1_macro` |
+| [04-experiment-track-model](04-experiment-track-model-mba-2026-08-19.ipynb) | Seguimiento de experimentos (MLflow) | Registro de parámetros y métricas |
+| [05-model_validation](05-model_validation-mba-2026-08-19.ipynb) | Validación de datos y proceso | Revisión de particiones y métricas |
+| [06-automl_model_selection](06-automl_model_selection-mba-2026-08-20.ipynb) | AutoML (FLAML) | Comparación automática de modelos |
 
-Los splits corregidos y sus checksums viven en `data/05_model_input/`
-(`metadata_v2.json`); la causa raíz del leakage está documentada en el notebook de
-[4-feat_eng](../4-feat_eng/01-basic-feature-engineering-pipeline-mba-2026-08-19.ipynb)
-y en el PR #24.
+Los splits y sus checksums viven en `data/05_model_input/` (`metadata_v2.json`). La
+descripción de la preparación de features está en el notebook de
+[4-feat_eng](../4-feat_eng/01-basic-feature-engineering-pipeline-mba-2026-08-19.ipynb).
