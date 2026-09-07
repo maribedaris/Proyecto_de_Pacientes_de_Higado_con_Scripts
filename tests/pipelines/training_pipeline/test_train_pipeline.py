@@ -11,7 +11,12 @@ from sklearn.naive_bayes import GaussianNB
 from sklearn.pipeline import Pipeline
 
 from pipelines.training_pipeline.train_pipeline import (
+    CV_FOLDS,
     FEATURE_COLUMNS,
+    VALIDATION_THRESHOLD,
+    _build_model,
+    cross_validate_model,
+    diagnose_generalization,
     read_feature_data,
     run_training_pipeline,
     select_threshold,
@@ -74,6 +79,69 @@ def test_split_is_stratified_and_reproducible(synthetic_features: pd.DataFrame) 
     assert y_train.mean() == pytest.approx(y_test.mean())
     pd.testing.assert_frame_equal(x_train, other_split[0])
     pd.testing.assert_series_equal(y_test, other_split[3])
+
+
+def test_cross_validation_uses_stratified_folds(synthetic_features: pd.DataFrame) -> None:
+    x_train, _, y_train, _ = split_features(synthetic_features)
+
+    validation = cross_validate_model(_build_model(), x_train, y_train, threshold=0.5)
+
+    assert len(validation["folds"]) == CV_FOLDS
+    assert validation["threshold"] == VALIDATION_THRESHOLD
+    assert set(validation["metrics"]) == {
+        "accuracy",
+        "precision",
+        "recall",
+        "f1",
+        "f1_macro",
+        "roc_auc",
+    }
+    for fold in validation["folds"]:
+        assert sorted(fold["validation_class_counts"].values()) == [4, 4]
+
+
+def test_generalization_diagnostic_identifies_overfitting() -> None:
+    train_metrics = {"roc_auc": 0.95}
+    cross_validation = {"metrics": {"roc_auc": {"mean": 0.7, "std": 0.1}}}
+    test_metrics = {"roc_auc": 0.68}
+
+    diagnosis = diagnose_generalization(train_metrics, cross_validation, test_metrics)
+
+    assert diagnosis["diagnosis"] == "possible_overfitting"
+    assert diagnosis["recommendations"]
+
+
+def test_generalization_diagnostic_identifies_underfitting() -> None:
+    train_metrics = {"roc_auc": 0.55}
+    cross_validation = {"metrics": {"roc_auc": {"mean": 0.5, "std": 0.1}}}
+    test_metrics = {"roc_auc": 0.5}
+
+    diagnosis = diagnose_generalization(train_metrics, cross_validation, test_metrics)
+
+    assert diagnosis["diagnosis"] == "possible_underfitting"
+    assert diagnosis["recommendations"]
+
+
+def test_generalization_diagnostic_identifies_consistent_generalization() -> None:
+    train_metrics = {"roc_auc": 0.75}
+    cross_validation = {"metrics": {"roc_auc": {"mean": 0.74, "std": 0.05}}}
+    test_metrics = {"roc_auc": 0.7}
+
+    diagnosis = diagnose_generalization(train_metrics, cross_validation, test_metrics)
+
+    assert diagnosis["diagnosis"] == "consistent_generalization"
+    assert diagnosis["recommendations"] == []
+
+
+def test_generalization_diagnostic_identifies_cv_test_gap() -> None:
+    train_metrics = {"roc_auc": 0.8}
+    cross_validation = {"metrics": {"roc_auc": {"mean": 0.8, "std": 0.05}}}
+    test_metrics = {"roc_auc": 0.65}
+
+    diagnosis = diagnose_generalization(train_metrics, cross_validation, test_metrics)
+
+    assert diagnosis["diagnosis"] == "possible_cv_test_gap"
+    assert diagnosis["recommendations"]
 
 
 def test_validate_train_test_split_accepts_valid_data() -> None:
@@ -184,6 +252,13 @@ def test_training_generates_metrics_model_and_metadata(
     assert metrics_path.exists()
     assert metadata_path.exists()
     assert set(result.metrics) == {
+        "train",
+        "cross_validation",
+        "test",
+        "comparison",
+        "generalization",
+    }
+    assert set(result.metrics["train"]) == {
         "accuracy",
         "precision",
         "recall",
@@ -194,6 +269,15 @@ def test_training_generates_metrics_model_and_metadata(
         "average_precision",
         "confusion_matrix",
     }
+    assert set(result.metrics["cross_validation"]["metrics"]) == {
+        "accuracy",
+        "precision",
+        "recall",
+        "f1",
+        "f1_macro",
+        "roc_auc",
+    }
+    assert result.metrics["comparison"]["threshold"] == VALIDATION_THRESHOLD
     assert result.metadata["random_state"] == RANDOM_STATE
     assert result.metadata["split"]["train_size"] == TRAIN_ROWS
     assert result.metadata["split"]["test_size_rows"] == TEST_ROWS

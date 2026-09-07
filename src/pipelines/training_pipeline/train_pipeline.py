@@ -13,6 +13,7 @@ from typing import Any, cast
 import numpy as np
 import pandas as pd
 from joblib import dump
+from sklearn.base import clone
 from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
 from sklearn.metrics import (
@@ -46,6 +47,9 @@ TEST_SIZE = 0.2
 CV_FOLDS = 10
 EXPECTED_CLASS_COUNT = 2
 MAX_TARGET_DISTRIBUTION_DIFFERENCE = 0.1
+OVERFITTING_ROC_AUC_GAP = 0.1
+UNDERFITTING_ROC_AUC_LIMIT = 0.6
+VALIDATION_THRESHOLD = 0.5
 SMOOTHING_VALUES = np.logspace(-10, -2, 9)
 FEATURE_COLUMNS = [
     "Age",
@@ -63,6 +67,7 @@ FEATURE_COLUMNS = [
 ]
 NUMERIC_COLUMNS = [column for column in FEATURE_COLUMNS if column != "Gender"]
 CATEGORICAL_COLUMNS = ["Gender"]
+VALIDATION_METRICS = ("accuracy", "precision", "recall", "f1", "f1_macro", "roc_auc")
 
 
 @dataclass
@@ -70,7 +75,7 @@ class TrainingResult:
     """Resultado completo del entrenamiento y de la evaluación final."""
 
     model: Pipeline
-    metrics: dict[str, float | list[list[int]]]
+    metrics: dict[str, Any]
     metadata: dict[str, Any]
     threshold: float
 
@@ -210,6 +215,101 @@ def _cv() -> StratifiedKFold:
     return StratifiedKFold(n_splits=CV_FOLDS, shuffle=True, random_state=RANDOM_STATE)
 
 
+def cross_validate_model(
+    estimator: Pipeline,
+    x_train: pd.DataFrame,
+    y_train: pd.Series,
+    threshold: float,
+) -> dict[str, Any]:
+    """Evalúa un estimador en folds estratificados usando únicamente train.
+
+    El preprocesador se clona y ajusta dentro de cada fold. El threshold recibido
+    debe estar definido antes de evaluar los folds y no depender de sus etiquetas.
+    """
+    fold_results: list[dict[str, Any]] = []
+    fold_metric_values: dict[str, list[float]] = {metric: [] for metric in VALIDATION_METRICS}
+
+    for fold_number, (fit_indices, validation_indices) in enumerate(
+        _cv().split(x_train, y_train), start=1
+    ):
+        fold_model = clone(estimator)
+        x_fit = x_train.iloc[fit_indices]
+        y_fit = y_train.iloc[fit_indices]
+        x_validation = x_train.iloc[validation_indices]
+        y_validation = y_train.iloc[validation_indices]
+        fold_model.fit(x_fit, y_fit)
+        probabilities = fold_model.predict_proba(x_validation)[:, 1]
+        predictions = (probabilities >= threshold).astype(int)
+        metrics = _calculate_metrics(y_validation, predictions, probabilities)
+        for metric in VALIDATION_METRICS:
+            fold_metric_values[metric].append(float(cast(float, metrics[metric])))
+        fold_results.append(
+            {
+                "fold": fold_number,
+                "train_size": len(x_fit),
+                "validation_size": len(x_validation),
+                "validation_class_counts": y_validation.value_counts().sort_index().to_dict(),
+                "metrics": metrics,
+            }
+        )
+
+    summary = {
+        metric: {
+            "mean": float(np.mean(values)),
+            "std": float(np.std(values, ddof=1)),
+            "folds": values,
+        }
+        for metric, values in fold_metric_values.items()
+    }
+    return {"threshold": threshold, "metrics": summary, "folds": fold_results}
+
+
+def diagnose_generalization(
+    train_metrics: dict[str, Any],
+    cross_validation: dict[str, Any],
+    test_metrics: dict[str, Any],
+) -> dict[str, Any]:
+    """Diagnostica brechas de generalización sin depender del threshold."""
+    train_roc_auc = float(train_metrics["roc_auc"])
+    cross_validation_roc_auc = float(cross_validation["metrics"]["roc_auc"]["mean"])
+    test_roc_auc = float(test_metrics["roc_auc"])
+    train_cv_gap = train_roc_auc - cross_validation_roc_auc
+    cv_test_gap = cross_validation_roc_auc - test_roc_auc
+
+    if train_cv_gap > OVERFITTING_ROC_AUC_GAP:
+        diagnosis = "possible_overfitting"
+        recommendations = [
+            "revisar la complejidad del modelo",
+            "evaluar regularización o más datos",
+        ]
+    elif (
+        train_roc_auc < UNDERFITTING_ROC_AUC_LIMIT
+        and cross_validation_roc_auc < UNDERFITTING_ROC_AUC_LIMIT
+    ):
+        diagnosis = "possible_underfitting"
+        recommendations = [
+            "revisar la capacidad del modelo",
+            "revisar la calidad y representatividad de las features",
+        ]
+    elif abs(cv_test_gap) <= OVERFITTING_ROC_AUC_GAP:
+        diagnosis = "consistent_generalization"
+        recommendations = []
+    else:
+        diagnosis = "possible_cv_test_gap"
+        recommendations = ["revisar la representatividad del conjunto de prueba"]
+
+    return {
+        "diagnosis": diagnosis,
+        "train_cv_roc_auc_gap": train_cv_gap,
+        "cv_test_roc_auc_gap": cv_test_gap,
+        "thresholds": {
+            "overfitting_roc_auc_gap": OVERFITTING_ROC_AUC_GAP,
+            "underfitting_roc_auc_limit": UNDERFITTING_ROC_AUC_LIMIT,
+        },
+        "recommendations": recommendations,
+    }
+
+
 def select_threshold(y_true: pd.Series, probabilities: np.ndarray) -> float:
     """Selecciona el threshold que maximiza f1_macro sobre probabilidades OOF."""
     candidates = np.quantile(probabilities, np.linspace(0.01, 0.99, 197))
@@ -282,11 +382,41 @@ def run_training_pipeline(
         n_jobs=1,
     )[:, 1]
     threshold = select_threshold(y_train, oof_probabilities)
+    cross_validation = cross_validate_model(
+        grid.best_estimator_, x_train, y_train, VALIDATION_THRESHOLD
+    )
 
     model = grid.best_estimator_.fit(x_train, y_train)
+    train_probabilities = model.predict_proba(x_train)[:, 1]
+    train_predictions = (train_probabilities >= threshold).astype(int)
+    train_metrics = _calculate_metrics(y_train, train_predictions, train_probabilities)
+    train_comparison_predictions = (train_probabilities >= VALIDATION_THRESHOLD).astype(int)
+    train_comparison_metrics = _calculate_metrics(
+        y_train, train_comparison_predictions, train_probabilities
+    )
     test_probabilities = model.predict_proba(x_test)[:, 1]
     test_predictions = (test_probabilities >= threshold).astype(int)
-    metrics = _calculate_metrics(y_test, test_predictions, test_probabilities)
+    test_metrics = _calculate_metrics(y_test, test_predictions, test_probabilities)
+    test_comparison_predictions = (test_probabilities >= VALIDATION_THRESHOLD).astype(int)
+    test_comparison_metrics = _calculate_metrics(
+        y_test, test_comparison_predictions, test_probabilities
+    )
+    generalization = diagnose_generalization(
+        train_comparison_metrics,
+        cross_validation,
+        test_comparison_metrics,
+    )
+    metrics: dict[str, Any] = {
+        "train": train_metrics,
+        "cross_validation": cross_validation,
+        "test": test_metrics,
+        "comparison": {
+            "threshold": VALIDATION_THRESHOLD,
+            "train": train_comparison_metrics,
+            "test": test_comparison_metrics,
+        },
+        "generalization": generalization,
+    }
     metadata: dict[str, Any] = {
         "model": "GaussianNB",
         "best_params": grid.best_params_,
@@ -306,6 +436,9 @@ def run_training_pipeline(
         "methodology": {
             "grid_search_cv_folds": CV_FOLDS,
             "grid_search_scoring": "f1_macro",
+            "validation_cv": "StratifiedKFold on train only",
+            "validation_threshold": VALIDATION_THRESHOLD,
+            "final_train_test_threshold": "OOF optimized threshold",
             "oof_threshold": True,
             "test_used_only_for_final_evaluation": True,
         },

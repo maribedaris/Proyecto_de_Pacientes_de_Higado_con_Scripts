@@ -1,61 +1,52 @@
 # Training Pipeline
 
-## Propósito
+## Qué hace
 
-Entrena y evalúa el modelo GaussianNB para clasificar pacientes con problemas de
-hígado a partir de las features generadas por el Feature Pipeline.
+Entrena un `GaussianNB` con las features generadas por el Feature Pipeline y evalúa
+su capacidad de generalización sin usar el test para tomar decisiones de entrenamiento.
 
-## Entrada
-
-La entrada productiva es:
+La entrada es:
 
 `data/04_feature/Pacientes_porblemas_higado_features.parquet`
 
-Contiene las variables clínicas, `Gender`, los dos cocientes derivados y la etiqueta
-`Dataset`. El pipeline no utiliza `data/05_model_input`.
+El pipeline valida las columnas y etiquetas, separa train/test de forma estratificada
+(80/20, `random_state=42`) y comprueba que ambos conjuntos estén correctamente
+separados antes de entrenar.
 
-## Proceso
+## Entrenamiento y validación
 
-1. Valida el esquema, las etiquetas `1` y `2` y la presencia de ambas clases.
-2. Recodifica `Dataset == "1"` como clase positiva.
-3. Divide los datos en train/test con proporción 80/20, estratificación y `random_state=42`.
-4. Ajusta imputación, escalado y codificación categórica dentro de un pipeline de
-   scikit-learn.
-5. Selecciona `var_smoothing` con `GridSearchCV`, 10 folds estratificados,
-   `random_state=42`, `f1_macro` y `np.logspace(-10, -2, 9)`.
-6. Obtiene probabilidades OOF sobre train y selecciona el threshold que maximiza
-   `f1_macro`.
-7. Reentrena el mejor pipeline con todo train y evalúa test una sola vez.
+`GridSearchCV` selecciona `var_smoothing` con `f1_macro` usando únicamente train.
+Después, `StratifiedKFold` comprueba el modelo en distintas particiones de train,
+manteniendo una proporción similar de las dos clases en cada fold.
 
-## Validación train/test
+En cada fold se clona el pipeline y se ajustan el imputador, el escalado, la
+codificación y el modelo solo con la parte de entrenamiento. El fold de validación
+solo se transforma y evalúa. El test permanece separado hasta la evaluación final.
 
-El flujo recibe features preparados, realiza la separación train/test, ejecuta
-`validate_train_test_split()` y continúa con el entrenamiento y la evaluación.
+La validación cruzada usa threshold fijo `0.5` para que el threshold no se seleccione
+con las etiquetas del mismo fold. El threshold optimizado con probabilidades OOF de
+train se utiliza después para las métricas finales de train y test.
 
-La validación comprueba que:
+Se comparan resultados de train, cross-validation (`mean +/- std`) y test. Se generan:
+`accuracy`, `precision`, `recall`, `f1`, `f1_macro`, `specificity`, `roc_auc`,
+`average_precision` y matriz de confusión.
 
-- conjuntos vacíos o tamaños incompatibles entre `X` e `y` producen un error;
-- columnas diferentes o en distinto orden producen un error;
-- filas idénticas compartidas entre train y test producen un error;
-- una diferencia superior al 10% en la distribución del target genera un warning,
-  pero no detiene el entrenamiento.
+El diagnóstico usa `roc_auc`: una brecha train-CV superior a `0.10` indica posible
+overfitting; valores de train y CV inferiores a `0.60` indican posible underfitting;
+y una diferencia CV-test superior a `0.10` indica una posible brecha de generalización.
+El diagnóstico solo informa y recomienda revisar el modelo; no cambia sus parámetros
+automáticamente.
 
-No existe un identificador único de paciente en las features actuales. Por eso,
-la detección de solapamiento mediante filas idénticas no puede detectar que el
-mismo paciente aparezca en ambos conjuntos con valores clínicos diferentes.
+## Salidas y ejecución
 
-## Modelo y evaluación
-
-El modelo final es `GaussianNB`. Se generan `accuracy`, `precision`, `recall`, `f1`,
-`f1_macro`, `specificity`, `roc_auc`, `average_precision` y matriz de confusión.
-
-Por defecto se persisten:
+Se guardan por defecto:
 
 - `data/06_models/pacientes_higado_gaussiannb.joblib`
 - `data/07_model_output/pacientes_higado_metrics.json`
 - `data/07_model_output/pacientes_higado_metadata.json`
 
-## Ejecución
+La metadata y las métricas contienen los resultados de train, los folds y su resumen,
+el test y el diagnóstico de generalización.
 
 Desde la raíz del proyecto:
 
@@ -63,28 +54,9 @@ Desde la raíz del proyecto:
 PYTHONPATH=src python -m pipelines.training_pipeline.train_pipeline
 ```
 
-En PowerShell:
-
-```powershell
-$env:PYTHONPATH = "src"
-python -m pipelines.training_pipeline.train_pipeline
-```
-
-También pueden cambiarse las rutas con `--input-path`, `--model-path`,
-`--metrics-path` y `--metadata-path`.
-
-Las pruebas se ejecutan con:
+Las rutas se pueden cambiar con `--input-path`, `--model-path`, `--metrics-path` y
+`--metadata-path`. Las pruebas se ejecutan con:
 
 ```bash
 pytest tests/pipelines/training_pipeline/test_train_pipeline.py
 ```
-
-## Controles contra data leakage
-
-- La entrada es el Parquet del Feature Pipeline, no los splits históricos de
-  `data/05_model_input`.
-- El preprocesamiento se ajusta dentro del pipeline y de cada fold de validación.
-- GridSearchCV solo observa train.
-- El threshold se calcula exclusivamente con probabilidades OOF de train.
-- Test no participa en hiperparámetros ni threshold; se usa una única vez para la
-  evaluación final.
