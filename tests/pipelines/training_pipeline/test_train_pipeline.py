@@ -16,6 +16,7 @@ from pipelines.training_pipeline.train_pipeline import (
     run_training_pipeline,
     select_threshold,
     split_features,
+    validate_train_test_split,
 )
 
 SYNTHETIC_ROWS = 100
@@ -30,7 +31,7 @@ def synthetic_features() -> pd.DataFrame:
     positive = np.arange(rows) % 2 == 0
     data = pd.DataFrame(
         {
-            "Age": np.where(positive, 55, 30),
+            "Age": np.where(positive, 55, 30) + np.arange(rows) * 0.01,
             "Gender": np.where(positive, "Male", "Female"),
             "Total_Bilirubin": np.where(positive, 4.0, 0.8),
             "Direct_Bilirubin": np.where(positive, 1.5, 0.2),
@@ -73,6 +74,78 @@ def test_split_is_stratified_and_reproducible(synthetic_features: pd.DataFrame) 
     assert y_train.mean() == pytest.approx(y_test.mean())
     pd.testing.assert_frame_equal(x_train, other_split[0])
     pd.testing.assert_series_equal(y_test, other_split[3])
+
+
+def test_validate_train_test_split_accepts_valid_data() -> None:
+    x_train = pd.DataFrame({"feature": [1, 2]})
+    x_test = pd.DataFrame({"feature": [3, 4]})
+    y_train = pd.Series([0, 1])
+    y_test = pd.Series([0, 1])
+
+    result = validate_train_test_split(x_train, x_test, y_train, y_test)
+
+    assert result["passed"] is True
+    assert result["shared_rows"] == 0
+    assert result["target_distribution_warning"] is False
+
+
+def test_validate_train_test_split_rejects_shared_rows() -> None:
+    x_train = pd.DataFrame({"feature": [1, 2]})
+    x_test = pd.DataFrame({"feature": [2, 3]})
+    labels = pd.Series([0, 1])
+
+    with pytest.raises(ValueError, match="idénticos compartidos"):
+        validate_train_test_split(x_train, x_test, labels, labels)
+
+
+def test_validate_train_test_split_rejects_incompatible_lengths() -> None:
+    x_train = pd.DataFrame({"feature": [1, 2]})
+    x_test = pd.DataFrame({"feature": [3, 4]})
+    y_train = pd.Series([0])
+    y_test = pd.Series([0, 1])
+
+    with pytest.raises(ValueError):
+        validate_train_test_split(x_train, x_test, y_train, y_test)
+
+
+def test_validate_train_test_split_rejects_incompatible_columns() -> None:
+    x_train = pd.DataFrame({"feature_a": [1]})
+    x_test = pd.DataFrame({"feature_b": [1]})
+    labels = pd.Series([0])
+
+    with pytest.raises(ValueError, match="mismas columnas"):
+        validate_train_test_split(x_train, x_test, labels, labels)
+
+
+def test_validate_train_test_split_rejects_different_column_order() -> None:
+    x_train = pd.DataFrame({"Age": [1], "Gender": ["Male"], "Total_Bilirubin": [1.0]})
+    x_test = pd.DataFrame({"Gender": ["Female"], "Age": [2], "Total_Bilirubin": [2.0]})
+    labels = pd.Series([0])
+
+    with pytest.raises(ValueError):
+        validate_train_test_split(x_train, x_test, labels, labels)
+
+
+def test_validate_train_test_split_rejects_empty_sets() -> None:
+    x_train = pd.DataFrame(columns=["feature"])
+    x_test = pd.DataFrame({"feature": [1]})
+    y_train = pd.Series(dtype=int)
+    y_test = pd.Series([0])
+
+    with pytest.raises(ValueError, match="contener registros"):
+        validate_train_test_split(x_train, x_test, y_train, y_test)
+
+
+def test_validate_train_test_split_warns_on_target_distribution() -> None:
+    x_train = pd.DataFrame({"feature": [1, 2, 3, 4]})
+    x_test = pd.DataFrame({"feature": [5, 6]})
+    y_train = pd.Series([0, 0, 0, 1])
+    y_test = pd.Series([1, 1])
+
+    with pytest.warns(UserWarning, match="distribución"):
+        result = validate_train_test_split(x_train, x_test, y_train, y_test)
+
+    assert result["target_distribution_warning"] is True
 
 
 def test_threshold_uses_probabilities_and_returns_candidate() -> None:

@@ -1,25 +1,27 @@
-# Feature/Training/Inference Pipelines
+# Pipelines de características, entrenamiento e inferencia
 
-File Structure based on:
+La estructura del proyecto se basa en:
 
 <https://www.hopsworks.ai/post/mlops-to-ml-systems-with-fti-pipelines>
 
-## Folder Structure
+## Estructura de carpetas
 
-- src: source code
-    - data: data extraction, data validation, data processing, data transformation, data save and export, etc.
-    - model: model training, model evaluation, model validation, model save and export, etc.
-    - inference: model prediction, model serving, model monitoring, etc.
+- `src`: código fuente
+    - `data`: extracción, validación, procesamiento, transformación y exportación de datos.
+    - `model`: entrenamiento, evaluación, validación y exportación de modelos.
+    - `inference`: predicción, publicación y monitorización de modelos.
     - pipelines:
-        - feature_pipeline: takes as input raw data that it transforms into features (and labels)
-        - training_pipeline: takes as input features and labels that it transforms into a model
-        - inference_pipeline: takes new feature data and a trained model and makes predictions.
+        - `feature_pipeline`: transforma datos RAW en features y etiquetas.
+        - `training_pipeline`: transforma features y etiquetas en un modelo.
+        - `inference_pipeline`: recibe datos nuevos y un modelo entrenado para generar predicciones.
 
-you could have multiple pipelines, for example:
+La separación FTI del proyecto es:
 
-- 3 feature pipelines that extract raw data from different sources and transform them into features and save it into a feature store.
-- 2 training pipelines that take the features from the feature store and train different models.
-- 3 inference pipeline that creates a model serving endpoint for each of the trained models and 1 batch
-  inference pipeline that takes the features from the feature store and makes predictions in batch mode.
+- **Feature Pipeline:** RAW → validación → limpieza → feature engineering → features.
+- **Training Pipeline:** features → entrenamiento → evaluación → modelo.
+- **Inference Pipeline:** modelo + datos nuevos → transformación → predicciones.
 
-Finally is recommended to have a script that orchestrates the execution of the pipelines. This script should could be run in a cron job or a workflow orchestrator like Airflow, Prefect, Dagster, etc.
+Actualmente el Feature Pipeline y el Training Pipeline están implementados. El
+Inference Pipeline aún no está implementado. Los notebooks se reservan para
+exploración, análisis y experimentación; la lógica productiva debe vivir en
+`src/pipelines/`.
