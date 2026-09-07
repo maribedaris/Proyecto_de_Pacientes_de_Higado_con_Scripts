@@ -27,6 +27,23 @@ Contiene las variables clínicas, `Gender`, los dos cocientes derivados y la eti
    `f1_macro`.
 7. Reentrena el mejor pipeline con todo train y evalúa test una sola vez.
 
+## Validación train/test
+
+El flujo recibe features preparados, realiza la separación train/test, ejecuta
+`validate_train_test_split()` y continúa con el entrenamiento y la evaluación.
+
+La validación comprueba que:
+
+- conjuntos vacíos o tamaños incompatibles entre `X` e `y` producen un error;
+- columnas diferentes o en distinto orden producen un error;
+- filas idénticas compartidas entre train y test producen un error;
+- una diferencia superior al 10% en la distribución del target genera un warning,
+  pero no detiene el entrenamiento.
+
+No existe un identificador único de paciente en las features actuales. Por eso,
+la detección de solapamiento mediante filas idénticas no puede detectar que el
+mismo paciente aparezca en ambos conjuntos con valores clínicos diferentes.
+
 ## Modelo y evaluación
 
 El modelo final es `GaussianNB`. Se generan `accuracy`, `precision`, `recall`, `f1`,

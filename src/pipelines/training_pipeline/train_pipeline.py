@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import warnings
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
@@ -44,6 +45,7 @@ RANDOM_STATE = 42
 TEST_SIZE = 0.2
 CV_FOLDS = 10
 EXPECTED_CLASS_COUNT = 2
+MAX_TARGET_DISTRIBUTION_DIFFERENCE = 0.1
 SMOOTHING_VALUES = np.logspace(-10, -2, 9)
 FEATURE_COLUMNS = [
     "Age",
@@ -111,6 +113,75 @@ def split_features(data: pd.DataFrame) -> tuple[pd.DataFrame, pd.Series, pd.Data
             random_state=RANDOM_STATE,
         ),
     )
+
+
+def validate_train_test_split(
+    x_train: pd.DataFrame,
+    x_test: pd.DataFrame,
+    y_train: pd.Series,
+    y_test: pd.Series,
+) -> dict[str, bool | float | int]:
+    """Valida la separación y la distribución básica de train y test.
+
+    Args:
+        x_train: Features del conjunto de entrenamiento.
+        x_test: Features del conjunto de prueba.
+        y_train: Target del conjunto de entrenamiento.
+        y_test: Target del conjunto de prueba.
+
+    Comprueba que los conjuntos no estén vacíos, que features y etiquetas tengan
+    tamaños compatibles, que las columnas y su orden coincidan, que no haya filas
+    idénticas compartidas y que la distribución del target no difiera más del 10%.
+    Los problemas estructurales y el solapamiento lanzan ``ValueError``. Una
+    diferencia superior al 10% genera ``UserWarning`` sin detener el entrenamiento.
+
+    Returns:
+        Diccionario con el resultado de los checks, el número de filas compartidas,
+        la diferencia máxima de distribución y si se emitió la advertencia.
+
+    Limitación:
+        Como no existe un identificador único de paciente, el leakage solo puede
+        detectarse aquí cuando los registros son idénticos en train y test.
+    """
+    if x_train.empty or x_test.empty or y_train.empty or y_test.empty:
+        raise ValueError("Train y test deben contener registros y etiquetas")
+    if len(x_train) != len(y_train) or len(x_test) != len(y_test):
+        raise ValueError("Las variables predictoras y las etiquetas deben tener la misma longitud")
+    if list(x_train.columns) != list(x_test.columns):
+        raise ValueError("Train y test deben tener las mismas columnas y en el mismo orden")
+
+    shared_rows = x_train.merge(x_test.drop_duplicates(), how="inner", on=list(x_train.columns))
+    if not shared_rows.empty:
+        raise ValueError(
+            f"Se detectaron {len(shared_rows)} registros idénticos compartidos entre train y test"
+        )
+
+    train_distribution = y_train.value_counts(normalize=True)
+    test_distribution = y_test.value_counts(normalize=True)
+    classes = train_distribution.index.union(test_distribution.index)
+    distribution_difference = float(
+        (
+            train_distribution.reindex(classes, fill_value=0)
+            - test_distribution.reindex(classes, fill_value=0)
+        )
+        .abs()
+        .max()
+    )
+    distribution_warning = distribution_difference > MAX_TARGET_DISTRIBUTION_DIFFERENCE
+    if distribution_warning:
+        warnings.warn(
+            "La distribución del target difiere más de 10% entre train y test",
+            UserWarning,
+            stacklevel=2,
+        )
+
+    return {
+        "passed": True,
+        "shared_rows": 0,
+        "columns_compatible": True,
+        "target_distribution_difference": distribution_difference,
+        "target_distribution_warning": distribution_warning,
+    }
 
 
 def _build_model() -> Pipeline:
@@ -185,6 +256,12 @@ def run_training_pipeline(
     """Ajusta GaussianNB con train, evalúa test una única vez y persiste resultados."""
     data = read_feature_data(input_path)
     x_train, x_test, y_train, y_test = split_features(data)
+    split_check = validate_train_test_split(x_train, x_test, y_train, y_test)
+    LOGGER.info(
+        "Split validado: %d filas compartidas; diferencia máxima de target %.2f%%",
+        split_check["shared_rows"],
+        float(split_check["target_distribution_difference"]) * 100,
+    )
 
     grid = GridSearchCV(
         _build_model(),
