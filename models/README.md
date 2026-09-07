@@ -1,9 +1,9 @@
 # Modelos guardados del proyecto
 
-## Entregable del issue: `pacientes_higado_clasificacion-gaussiannb-v2.joblib`
+## Modelo final: `pacientes_higado_clasificacion-gaussiannb-v2.joblib`
 
-Este es **el** modelo entrenado en formato `.joblib` que pide el issue — el único
-artefacto en la raíz de `models/`. Es un pipeline completo (imputación por mediana +
+Este es el modelo entrenado en formato `.joblib` y el único artefacto en la raíz de
+`models/`. Es un pipeline completo (imputación por mediana +
 escalado + one-hot + GaussianNB con `var_smoothing=1e-10`), entrenado sobre
 `x_train_v2` en el notebook `02-basic_algorithms_model_selection`, y es el primer
 modelo de ML que supera al baseline heurístico del notebook 01 (f1_macro 0,741 vs

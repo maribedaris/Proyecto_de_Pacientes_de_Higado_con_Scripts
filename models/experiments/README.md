@@ -15,8 +15,7 @@ documentada en los notebooks sea reproducible.
 
 | `pacientes_higado_clasificacion-extra_tree-v1.joblib` | Extra trees (11 árboles, `class_weight="balanced"`) que la búsqueda FLAML eligió **con el split contaminado** (antes de la corrección) | Evidencia directa de que el leakage cambiaba al ganador del AutoML: sus métricas parecían buenas (recall 1,000) y eran espejismo — especificidad 0,000, comportamiento de dummy |
 
-**Nota sobre la ubicación:** estos tres artefactos estuvieron originalmente repartidos
-entre `models/` y `data/06_models/` (capa Kedro para modelos serializados,
-documentada en `data/README.md`). Se consolidaron aquí, junto al entregable, para que
-quede inequívoco cuál es "el" modelo del issue y cuáles son evidencia del proceso;
-las celdas de guardado de los notebooks 03–06 ya apuntan a esta carpeta.
+**Nota sobre la ubicación:** estos artefactos se conservan en esta carpeta como
+evidencia de los modelos evaluados. El modelo seleccionado se encuentra en `models/`,
+separado de las alternativas experimentales; las celdas de guardado de los notebooks
+03–06 apuntan a esta ubicación.
