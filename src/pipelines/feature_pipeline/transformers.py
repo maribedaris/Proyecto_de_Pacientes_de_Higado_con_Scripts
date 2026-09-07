@@ -1,10 +1,9 @@
 """Transformadores de características reutilizables del proyecto.
 
-Contiene los transformadores personalizados compatibles con scikit-learn que
-usan los pipelines de feature engineering y los notebooks de modelado, de modo
-que los modelos persistidos con joblib puedan recargarse desde cualquier
-proceso Python (la clase debe ser importable desde un módulo estable para que
-la deserialización funcione fuera del notebook que la creó).
+Contiene transformadores personalizados compatibles con scikit-learn que se
+utilizan en la ingeniería de características y en los notebooks de modelado.
+Al vivir en un módulo estable, los modelos guardados con joblib pueden cargarse
+desde cualquier proceso Python, incluso fuera del notebook que los creó.
 """
 
 from typing import Self

@@ -1,4 +1,4 @@
-"""Feature pipeline local: CSV raw a features históricas en Parquet."""
+"""Pipeline local de características: CSV RAW a features históricas en Parquet."""
 
 from __future__ import annotations
 
@@ -139,15 +139,15 @@ def _recover_missing_values(data: pd.DataFrame) -> pd.DataFrame:
 def prepare_features(data_path: str | Path) -> pd.DataFrame:
     """Prepara, transforma y valida el histórico antes de devolver sus features.
 
-    El flujo conserva la limpieza del Issue #1, incluida la recuperación de
-    faltantes, la deduplicación y la eliminación de etiquetas o bilirrubinas
-    inconsistentes. Después crea los ratios y ejecuta la validación final.
+    El flujo recupera faltantes compatibles, elimina duplicados y descarta
+    etiquetas o bilirrubinas inconsistentes. Después crea los ratios y ejecuta
+    la validación final.
     """
     data = _recover_missing_values(_read_raw_data(data_path))
     data = data.drop_duplicates()
     data = data[data["Dataset"].notna()]
-    # Esta limpieza conserva el comportamiento del Issue #1; la validación
-    # posterior garantiza que ninguna fila inconsistente llegue al Parquet.
+    # Las inconsistencias conocidas se eliminan antes de generar features; la
+    # validación posterior garantiza que ninguna llegue al Parquet.
     inconsistent = (data["Direct_Bilirubin"] > data["Total_Bilirubin"]).fillna(False)
     data = data.loc[~inconsistent].copy()
 

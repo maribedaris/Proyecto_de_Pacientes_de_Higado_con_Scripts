@@ -1,9 +1,9 @@
 """Preparación y carga de features históricos en Hopsworks.
 
-El módulo conserva la limpieza aplicada en la versión corregida del pipeline:
-fusiona filas casi duplicadas antes de deduplicar para evitar leakage y descarta
-filas sin etiqueta o con bilirrubinas inconsistentes. Los cocientes clínicos se
-generan con el transformador compartido del pipeline de features.
+El módulo fusiona filas casi duplicadas antes de deduplicar para evitar fuga de
+información y descarta filas sin etiqueta o con bilirrubinas inconsistentes. Los
+cocientes clínicos se generan con el transformador compartido del pipeline de
+características.
 """
 
 from __future__ import annotations
