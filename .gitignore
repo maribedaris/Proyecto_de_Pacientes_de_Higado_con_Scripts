@@ -8,8 +8,11 @@ data/**
 # artifacts consumed downstream (5-models): splits + preprocessor + metadata
 !data/05_model_input/**
 
-# serialized model artifacts (Kedro 06_models layer): referenced by notebooks/5-models/README.md
-!data/06_models/**
+# official model artifact used by the current Inference Pipeline
+!data/06_models/pacientes_higado_gaussiannb.joblib
+
+# official model metadata used by the current Inference Pipeline
+!data/07_model_output/pacientes_higado_metadata.json
 
 # also keep all .gitkeep files
 !.gitkeep
