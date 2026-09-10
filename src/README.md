@@ -8,8 +8,6 @@ La estructura del proyecto se basa en:
 
 - `src`: código fuente
     - `data`: extracción, validación, procesamiento, transformación y exportación de datos.
-    - `model`: entrenamiento, evaluación, validación y exportación de modelos.
-    - `inference`: predicción, publicación y monitorización de modelos.
     - pipelines:
         - `feature_pipeline`: transforma datos RAW en features y etiquetas.
         - `training_pipeline`: transforma features y etiquetas en un modelo.
@@ -21,7 +19,6 @@ La separación FTI del proyecto es:
 - **Training Pipeline:** features → entrenamiento → evaluación → modelo.
 - **Inference Pipeline:** modelo + datos nuevos → transformación → predicciones.
 
-Actualmente el Feature Pipeline y el Training Pipeline están implementados. El
-Inference Pipeline aún no está implementado. Los notebooks se reservan para
-exploración, análisis y experimentación; la lógica productiva debe vivir en
+Los tres pipelines están implementados. Los notebooks se reservan para exploración,
+análisis, interpretación y experimentación histórica; la lógica productiva vive en
 `src/pipelines/`.

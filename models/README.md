@@ -1,8 +1,8 @@
 # Modelos guardados del proyecto
 
-## Modelo final: `pacientes_higado_clasificacion-gaussiannb-v2.joblib`
+## Modelo histórico: `pacientes_higado_clasificacion-gaussiannb-v2.joblib`
 
-Este es el modelo entrenado en formato `.joblib` y el único artefacto en la raíz de
+Este es el modelo histórico entrenado en formato `.joblib` y el único artefacto en la raíz de
 `models/`. Es un pipeline completo (imputación por mediana +
 escalado + one-hot + GaussianNB con `var_smoothing=1e-10`), entrenado sobre
 `x_train_v2` en el notebook `02-basic_algorithms_model_selection`, y es el primer
@@ -27,6 +27,11 @@ umbral = meta["umbral_decision"]  # 0.0011
 probabilidades = pipe.predict_proba(X_nuevos)[:, 1]
 predicciones = (probabilidades >= umbral).astype(int)  # nunca pipe.predict(X_nuevos)
 ```
+
+El modelo operativo actual lo genera `src/pipelines/training_pipeline/` en
+`data/06_models/` y lo consume `src/pipelines/inference_pipeline/`. Este directorio
+conserva el modelo anterior y su metadata como evidencia de la selección realizada en
+notebooks.
 
 ## Evidencia del proceso de selección
 
