@@ -1,4 +1,4 @@
-# Etapa 5 — Modelos: resumen ejecutivo
+# Etapa 5 — Modelos históricos: resumen ejecutivo
 
 Resultado consolidado de la selección y validación de modelos. Todos los números de esta
 tabla provienen de la evaluación sobre el mismo conjunto de prueba (`x_test_v2`, 114
@@ -20,7 +20,7 @@ GaussianNB fue validado además con tuning de `var_smoothing` y prueba de permut
 Los notebooks 04 y 05 re-entrenan variantes de RF con f1_macro 0.515–0.556 y no
 aportan un modelo distinto a la tabla.*
 
-## Modelo recomendado
+## Modelo recomendado en la etapa histórica
 
 **GaussianNB con umbral de decisión 0.0011**, entrenado sobre `x_train_v2` en el
 notebook 02. Artefacto: `models/pacientes_higado_clasificacion-gaussiannb-v2.joblib`
@@ -28,6 +28,10 @@ notebook 02. Artefacto: `models/pacientes_higado_clasificacion-gaussiannb-v2.job
 [models/README.md](../../models/README.md) para las instrucciones de uso — en
 particular, **nunca llamar `predict()` directo**: el umbral no está empaquetado en el
 pipeline y aplicar el corte 0.5 por defecto degrada el f1_macro de 0.741 a 0.631.
+
+Este resultado pertenece al proceso histórico de selección. El modelo operativo actual
+lo genera `src/pipelines/training_pipeline/` y lo consume
+`src/pipelines/inference_pipeline/`.
 
 ## Consideraciones metodológicas
 

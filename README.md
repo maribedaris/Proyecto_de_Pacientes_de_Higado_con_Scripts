@@ -26,7 +26,7 @@ El estado actual es:
 
 - **Feature Pipeline:** implementado en `src/pipelines/feature_pipeline/`.
 - **Training Pipeline:** implementado en `src/pipelines/training_pipeline/`, incluyendo la validación de la separación Train/Test.
-- **Inference Pipeline:** pendiente de implementación productiva; los análisis actuales están en `notebooks/6-interpretation/`.
+- **Inference Pipeline:** implementado en `src/pipelines/inference_pipeline/`.
 - **Orquestación FTI completa:** pendiente.
 
 Los notebooks se utilizan para exploración, análisis y experimentación. La lógica
@@ -105,8 +105,6 @@ Feature Pipeline se encuentran en
 ├── notebooks/           # Exploración, análisis y experimentación
 ├── src/
 │   ├── data/             # Lectura, validación y persistencia de datos
-│   ├── inference/        # Componentes de inferencia
-│   ├── model/            # Componentes de modelado
 │   └── pipelines/        # Feature, Training e Inference Pipelines
 ├── tests/               # Pruebas unitarias organizadas por módulo
 ├── pyproject.toml       # Configuración y dependencias
