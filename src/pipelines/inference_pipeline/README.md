@@ -2,15 +2,16 @@
 
 ## Qué hace
 
-Lee features nuevas y genera una predicción por registro usando el modelo entrenado.
+Lee datos clínicos RAW o features nuevas y genera una predicción por registro usando el modelo entrenado.
 No entrena el modelo ni ajusta transformaciones con los datos de entrada.
 
 ## Entrada y modelo
 
 Por defecto lee `data/04_feature/Pacientes_porblemas_higado_features.parquet`.
-También acepta CSV. El archivo debe contener las 12 variables de `FEATURE_COLUMNS`:
-las variables clínicas originales, `Gender` y los dos ratios generados por el Feature
-Pipeline. `Dataset` es opcional y, si existe, no se usa como predictor.
+También acepta CSV. La entrada puede contener las 10 variables clínicas originales,
+en cuyo caso el adaptador calcula `Ratio_Bilirrubina_Directa` y `Ratio_De_Ritis`, o
+las 12 columnas de `FEATURE_COLUMNS` ya preparadas. `Dataset` es opcional y, si existe,
+no se usa como predictor.
 
 El artifact es `data/06_models/pacientes_higado_gaussiannb.joblib`. Es un `Pipeline`
 de scikit-learn que contiene imputación, escalado, codificación y `GaussianNB`. El

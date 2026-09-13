@@ -56,6 +56,19 @@ PYTHONPATH=src uv run --no-sync python -m pipelines.feature_pipeline.feature_pip
 
 Las rutas pueden personalizarse con `--data-path` y `--output-path`.
 
+## Aplicación Streamlit
+
+La aplicación reutiliza el modelo operativo y permite predicción online o batch:
+
+```bash
+PYTHONPATH=src uv run streamlit run app.py
+```
+
+En modo online se ingresan las diez variables clínicas originales; los dos ratios
+derivados se calculan automáticamente. En modo batch se puede cargar
+`data/examples/pacientes_higado_input_example.csv` o un CSV con las mismas columnas.
+El target `Dataset` no se solicita para inferencia.
+
 ## Configuración del entorno
 
 Crear o actualizar el entorno con:
