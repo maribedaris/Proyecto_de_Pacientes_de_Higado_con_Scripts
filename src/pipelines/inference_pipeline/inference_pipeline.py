@@ -12,6 +12,7 @@ import pandas as pd
 from joblib import load
 from sklearn.pipeline import Pipeline
 
+from pipelines.inference_pipeline.input_adapter import prepare_inference_features
 from pipelines.training_pipeline.train_pipeline import (
     DEFAULT_MODEL_PATH,
     FEATURE_COLUMNS,
@@ -50,12 +51,7 @@ def read_inference_data(input_path: str | Path = DEFAULT_INPUT_PATH) -> pd.DataF
     else:
         raise ValueError("El archivo de entrada debe tener extensión .parquet o .csv")
 
-    missing = sorted(set(FEATURE_COLUMNS) - set(data.columns))
-    if missing:
-        raise ValueError(f"Faltan columnas predictoras obligatorias: {missing}")
-    if data.empty:
-        raise ValueError("El archivo de entrada no contiene registros")
-    return data
+    return prepare_inference_features(data)
 
 
 def load_threshold(metadata_path: str | Path = DEFAULT_METADATA_PATH) -> float:
