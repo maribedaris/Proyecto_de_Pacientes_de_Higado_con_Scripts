@@ -58,8 +58,11 @@ El archivo de salida se descarga en formato CSV. Se incluye un ejemplo en:
 
 ```csv
 record_id,prediction,positive_probability
-0,0,0.00025966026515744975
-1,1,0.005563820395502386
+0,0,0.0006410318589396604
+1,1,0.9972031913656323
+2,0,0.00014109461155054997
+3,0,9.312336547025598e-05
+4,0,0.00011932326631504232
 ```
 
 ## 7. Validaciones
